@@ -35,7 +35,7 @@ splash_root.title('FAE Database')
 splash_root.geometry('750x500+300+100')
 splash_root.minsize(500, 350) 
 
-load = Image.open("SplashImage.JPG")                                       # Splash Image
+load = Image.open("SplashImage.PNG")                                       # Splash Image
 render = ImageTk.PhotoImage(load)
 splash_label = Label(splash_root,image=render) 
 
