@@ -4,7 +4,8 @@ from selenium.webdriver.common.keys import Keys
 import requests
 import time
 import json
-import itertools
+import itertools        # used to help iterate half the arrays
+import os               # used to check if json file is empty or not
 
 USERNAME = 'devAccount231'
 PASSWORD = 'verySecurePassword123'
@@ -22,7 +23,8 @@ driver = webdriver.Chrome('chromedriver.exe', options=chrome_options)
 #driver.maximize_window()        
 driver.implicitly_wait(1)
 
-driver.get('https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3639329617/37732098?tab=stats')
+driver.get('https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3639359618/37737079?tab=stats')
+#driver.get('https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3639329617/37732098?tab=stats')
 
 # account login  
 driver.find_element_by_css_selector('.riotbar-account-action').click()
@@ -86,9 +88,11 @@ for ban in driver.find_elements_by_class_name('bans-container')[1].find_elements
 print('bans: ', bans)
 
 
-game = {}
+arrayObj = []   # json array to help index game objects
+game = {}       # game objects for each team
 redObj = {}
 blueObj = {}
+team = {}       # team object for team red and team blue objecs
 
 redPicks = []
 for x in itertools.islice(picks, 0, int(len(picks) / 2)):
@@ -127,7 +131,7 @@ redObj['kills'] = redKills
 redObj['deaths'] = redDeaths
 redObj['assists'] = redAssists
 redObj['creepScore'] = redCreepScore
-game['redTeam'] = redObj
+team['redTeam'] = redObj
 
 bluePicks = []
 for x in itertools.islice(picks, int(len(picks) / 2), len(picks)):
@@ -166,11 +170,24 @@ blueObj['kills'] = blueKills
 blueObj['deaths'] = blueDeaths
 blueObj['assists'] = blueAssists
 blueObj['creepScore'] = blueCreepScore
-game['blueTeam'] = blueObj
+team['blueTeam'] = blueObj
 
-# convert to json object
-list_to_json = json.dumps(game)
 
-# use 'a' for 'append'
+# check if we need to create array (json is empty) or just add another element
+objectToDump = team
+# if size of json file is empty, create array and the objects
+if os.stat('data.json').st_size == 0:
+        game['game 0'] = team
+        arrayObj.append(game)
+        objectToDump = arrayObj
+else:
+        with open('data.json') as f:
+                parse_data = json.load(f)
+                game['game ' + str(len(parse_data))] = team
+                objectToDump = game
+                parse_data.append(objectToDump)
+                objectToDump = parse_data
+
+#use 'a' for 'append'
 with open('data.json', 'w', encoding='utf-8') as f:
-    json.dump(game, f, ensure_ascii=False, indent=4)
+    json.dump(objectToDump, f, ensure_ascii=False, indent=4)
