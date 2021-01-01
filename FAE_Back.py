@@ -1,193 +1,197 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.keys import Keys
 import requests
-import time
 import json
 import itertools        # used to help iterate half the arrays
 import os               # used to check if json file is empty or not
+import dotenv
 
-USERNAME = 'devAccount231'
-PASSWORD = 'verySecurePassword123'
+def getData(matchID):
+  version = ''
+  matchInfo = ''
 
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument('--no-sandbox')
-chrome_options.add_argument('--window-size=1920,1080')
-chrome_options.add_argument('--proxy-server="direct://"')
-chrome_options.add_argument('--proxy-bypass-list=*')
-chrome_options.add_argument("--disable-gpu")
+  # load API key
+  dotenv.load_dotenv()
+  KEY = os.getenv("API_KEY")
 
-driver = webdriver.Chrome('chromedriver.exe', options=chrome_options)
+  # make API request
+  # matchID = 3639329617
+  # matchID = 3722369805
 
-#driver.maximize_window()        
-driver.implicitly_wait(1)
+  # https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3724256705/46336961?tab=overview
+  # check if user entered URL instead of matchID
+  if(matchID[0] == 'h'):
+    # get the match ID
+    start = matchID.find('NA1') + 4
+    subStr = matchID[start:]
+    end = subStr.find('/')
+    matchID = subStr[0:end]
 
-driver.get('https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3639359618/37737079?tab=stats')
-#driver.get('https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/3639329617/37732098?tab=stats')
+  # get match history
+  response = requests.get(f'https://na1.api.riotgames.com/lol/match/v4/matches/{matchID}?api_key={KEY}')
+  matchInfo = response.json()
 
-# account login  
-driver.find_element_by_css_selector('.riotbar-account-action').click()
-driver.find_element_by_name("username").send_keys(USERNAME)
-driver.find_element_by_name('password').send_keys(PASSWORD)
-driver.find_elements_by_css_selector('.mobile-button__submit')[0].click()
+  picksArr = []
+  redPicks = []
+  bluePicks = []
+  for x in matchInfo['participants']:
+    picksArr.append(x['championId'])
+  pickSize = int(len(picksArr))
+  for x in itertools.islice(picksArr, 0, int(pickSize / 2)):
+    redPicks.append(x)
+  for x in itertools.islice(picksArr, int(pickSize / 2), pickSize):
+    bluePicks.append(x)
+ 
+  # get latest version
+  response = requests.get('https://ddragon.leagueoflegends.com/api/versions.json')
+  version = json.loads(response.text)[0]
 
-driver.implicitly_wait(1)
-time.sleep(2)
+  #response = requests.get('https://raw.githubusercontent.com/ngryman/lol-champions/master/champions.json')
+  # champion list
+  response = requests.get(f'https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/championFull.json')
+  championIDs = json.loads(response.text)
 
-# win/loss
-result = []
-for endResult in driver.find_elements_by_class_name('game-conclusion'):
-        result.append(endResult.text)
-print('result: ', result)
+  # picks
+  pickNames = []
+  redPicks = []
+  bluePicks = []
+  for x in picksArr:
+    for key, value in championIDs['keys'].items():
+      if(int(key) == x):
+        pickNames.append(value)
+  print('pickNames: ', pickNames)
+  for x in itertools.islice(pickNames, 0, int(pickSize / 2)):
+    redPicks.append(x)
+  for x in itertools.islice(pickNames, int(pickSize / 2), pickSize):
+    bluePicks.append(x)
+  print('redPicks: ', redPicks)
+  print('bluePicks: ', bluePicks)
 
-# kills
-totalKills = []
-for kills in driver.find_elements_by_class_name('gs-container.team-summary'):
-        totalKills.append(kills.find_element_by_class_name('kills').text)
-print('kills: ', totalKills)
+  # win/loss
+  result = []
+  for x in matchInfo['teams']:
+    result.append(x['win'])
+  print('result: ', result)
 
-# picks
-picks = []
-for pick in driver.find_elements_by_class_name('champion-nameplate-name'):
-        picks.append(pick.find_elements_by_class_name('binding')[0].text)
-print('picks: ', picks)
+  # total kills per team
+  totalKills = []
+  killCountRed = 0
+  killCountBlue = 0
+  participantSize = len(matchInfo['participants'])
+  for x in itertools.islice(matchInfo['participants'], 0 , int(participantSize / 2)):
+    killCountRed += x['stats']['kills']
+  for x in itertools.islice(matchInfo['participants'], int(participantSize / 2), participantSize):
+    killCountBlue += x['stats']['kills']
 
-# pick pictures
-pickPics = []
-for png in driver.find_elements_by_class_name('champion-col.name'):
-        pickPics.append(png.find_element_by_tag_name('img').get_attribute('src'))
-print('pickPics: ', pickPics)
+  totalKills.append(killCountRed)
+  totalKills.append(killCountBlue)
+  print('killCountRed: ', killCountRed)
+  print('killCountBlue: ', killCountBlue)
+  print('totalKills: ', totalKills)
 
-# kills, deaths, assists
-kills = []
-deaths = []
-assists = []
-for stats in driver.find_elements_by_class_name('kda-kda'):
-        kills.append(stats.find_elements_by_tag_name('div')[0].text)
-        deaths.append(stats.find_elements_by_tag_name('div')[1].text)
-        assists.append(stats.find_elements_by_tag_name('div')[2].text)
-print('kills: ', kills)
-print('deaths: ', deaths)
-print('assists: ', assists)
+  # kills, deaths, assists
+  redKills = []
+  blueKills = []
+  redDeaths = []
+  blueDeaths = []
+  redAssists = []
+  blueAssists = []
+  for x in itertools.islice(matchInfo['participants'], 0, int(participantSize / 2)):
+    redKills.append(x['stats']['kills'])
+    redDeaths.append(x['stats']['deaths'])
+    redAssists.append(x['stats']['assists'])
+  for x in itertools.islice(matchInfo['participants'], int(participantSize / 2), participantSize):
+    blueKills.append(x['stats']['kills'])
+    blueDeaths.append(x['stats']['deaths'])
+    blueAssists.append(x['stats']['assists'])
+  print('redKills: ', redKills)
+  print('blueKills: ', blueKills)
+  print('redDeaths: ', redDeaths)
+  print('blueDeaths: ', blueDeaths)
+  print('redAssists: ', redAssists)
+  print('blueAssists: ', blueAssists)
 
-# Creep Score
-creepScore = []
-for creep in driver.find_elements_by_class_name('minions-col.cs'):
-        creepScore.append(creep.find_element_by_class_name('binding').text)
-print('creepScore: ', creepScore)
+  # bans
+  redBans = []
+  blueBans = []
+  bansArr = []
+  banNames = []
+  for x in matchInfo['teams']:
+    for y in x['bans']:
+      bansArr.append(y)
 
-# bans
-bans = []
-# red team
-for ban in driver.find_elements_by_class_name('bans-container')[0].find_elements_by_class_name('champion-nameplate'):
-        bans.append(ban.find_element_by_tag_name('img').get_attribute('src'))
-# blue team
-for ban in driver.find_elements_by_class_name('bans-container')[1].find_elements_by_class_name('champion-nameplate'):
-        bans.append(ban.find_element_by_tag_name('img').get_attribute('src'))
-print('bans: ', bans)
+  for x in bansArr:
+    for key, value in championIDs['keys'].items():
+      if(int(key) == int(x['championId'])):
+        banNames.append(value)
+  print('banNames: ', banNames)
 
-
-arrayObj = []   # json array to help index game objects
-game = {}       # game objects for each team
-redObj = {}
-blueObj = {}
-team = {}       # team object for team red and team blue objecs
-
-redPicks = []
-for x in itertools.islice(picks, 0, int(len(picks) / 2)):
-        redPicks.append(x)
-
-redPickPics = []
-for x in itertools.islice(pickPics, 0, int(len(pickPics) / 2)):
-        redPickPics.append(x)
-
-redBans = []
-for x in itertools.islice(bans, 0, int(len(bans) / 2)):
-        redBans.append(x)
-
-redKills = []
-for x in itertools.islice(kills, 0, int(len(kills) / 2)):
-        redKills.append(x)
-
-redDeaths = []
-for x in itertools.islice(deaths, 0, int(len(deaths) / 2)):
-        redDeaths.append(x)
-
-redAssists = []
-for x in itertools.islice(assists, 0, int(len(assists) / 2)):
-        redAssists.append(x)
-
-redCreepScore = []
-for x in itertools.islice(creepScore, 0, int(len(creepScore) / 2)):
-        redCreepScore.append(x)
-
-redObj['result'] = result[0]
-redObj['totalKills'] = totalKills[0]
-redObj['picks'] = redPicks
-redObj['pickPics'] = redPickPics
-redObj['bans'] = redBans
-redObj['kills'] = redKills
-redObj['deaths'] = redDeaths
-redObj['assists'] = redAssists
-redObj['creepScore'] = redCreepScore
-team['redTeam'] = redObj
-
-bluePicks = []
-for x in itertools.islice(picks, int(len(picks) / 2), len(picks)):
-        bluePicks.append(x)
-
-bluePickPics = []
-for x in itertools.islice(pickPics, int(len(pickPics) / 2), len(pickPics)):
-        bluePickPics.append(x)
-
-blueBans = []
-for x in itertools.islice(bans, int(len(bans) / 2), len(bans)):
-        blueBans.append(x)
-
-blueKills = []
-for x in itertools.islice(kills, int(len(kills) / 2), len(kills)):
-        blueKills.append(x)
-
-blueDeaths = []
-for x in itertools.islice(deaths, int(len(deaths) / 2), len(deaths)):
-        blueDeaths.append(x)
-
-blueAssists = []
-for x in itertools.islice(assists, int(len(assists) / 2), len(assists)):
-        blueAssists.append(x)
-
-blueCreepScore = []
-for x in itertools.islice(creepScore, int(len(creepScore) / 2), len(creepScore)):
-        blueCreepScore.append(x)
-
-blueObj['result'] = result[1]
-blueObj['totalKills'] = totalKills[1]
-blueObj['picks'] = bluePicks
-blueObj['pickPics'] = bluePickPics
-blueObj['bans'] = blueBans
-blueObj['kills'] = blueKills
-blueObj['deaths'] = blueDeaths
-blueObj['assists'] = blueAssists
-blueObj['creepScore'] = blueCreepScore
-team['blueTeam'] = blueObj
+  banSize = len(banNames)
+  for x in itertools.islice(banNames, 0, int(banSize / 2)):
+    redBans.append(x)
+  for x in itertools.islice(banNames, int(banSize / 2), banSize):
+    blueBans.append(x)
+  print('redBans', redBans)
+  print('blueBans', blueBans)
 
 
-# check if we need to create array (json is empty) or just add another element
-objectToDump = team
-# if size of json file is empty, create array and the objects
-if os.stat('data.json').st_size == 0:
-        game['game 0'] = team
-        arrayObj.append(game)
-        objectToDump = arrayObj
-else:
-        with open('data.json') as f:
-                parse_data = json.load(f)
-                game['game ' + str(len(parse_data))] = team
-                objectToDump = game
-                parse_data.append(objectToDump)
-                objectToDump = parse_data
+  # JSON variables
+  arrayObj = []
+  game = {}
+  redObj = {}
+  blueObj = {}
+  team = {}
 
-#use 'a' for 'append'
-with open('data.json', 'w', encoding='utf-8') as f:
-    json.dump(objectToDump, f, ensure_ascii=False, indent=4)
+  # write to json file
+  redObj['result'] = result[0]
+  redObj['totalKills'] = totalKills[0]
+  redObj['picks'] = redPicks
+  redObj['bans'] = redBans
+  redObj['kills'] = redKills
+  redObj['deaths'] = redDeaths
+  redObj['assists'] = redAssists
+  team['redTeam'] = redObj
+
+  blueObj['result'] = result[1]
+  blueObj['totalKills'] = totalKills[1]
+  blueObj['picks'] = bluePicks
+  blueObj['bans'] = blueBans
+  blueObj['kills'] = blueKills
+  blueObj['deaths'] = blueDeaths
+  blueObj['assists'] = blueAssists
+  team['blueTeam'] = blueObj
+
+
+
+  # check if we need to create array (json is empty) or just add another element
+  objectToDump = team
+  # if size of json file is empty, create array and the objects
+  if os.stat('data.json').st_size == 0:
+          game['game 0'] = team
+          arrayObj.append(game)
+          objectToDump = arrayObj
+  else:
+          with open('data.json') as f:
+                  parse_data = json.load(f)
+                  game['game ' + str(len(parse_data))] = team
+                  objectToDump = game
+                  parse_data.append(objectToDump)
+                  objectToDump = parse_data
+
+  #use 'a' for 'append'
+  with open('data.json', 'w', encoding='utf-8') as f:
+      json.dump(objectToDump, f, ensure_ascii=False, indent=4)
+
+
+
+# for _, champion in championIDs['data'].items():
+#         #print(type(champion['key']))
+#         if int(champion['key']) == 266:
+#                 print(champion['name'])
+
+
+#print(championIDs.values[0])
+
+#print(championIDs['data'][0])
+
+# for x in championIDs:
+#         if x['data']
+
